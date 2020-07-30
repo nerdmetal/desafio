@@ -23,7 +23,7 @@ public class EventIteratorTest {
 
     @Before
     public void init() {
-        store = new EventStoreSynch();
+        store = new EventStoreRW();
     }
 
     @Test
@@ -76,7 +76,7 @@ public class EventIteratorTest {
         try (EventIterator eventIterator = store.query("type 1", 0, 1);) {
         } catch (Exception e) {
             e.printStackTrace();
-            assertTrue(false);
+            fail();
         }
     }
 

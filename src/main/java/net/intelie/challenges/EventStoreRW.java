@@ -1,18 +1,24 @@
 package net.intelie.challenges;
 
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class EventStoreSynch implements EventStore {
+public class EventStoreRW implements EventStore {
 
     private static final int INITIAL_CAPACITY = 1000;
 
     private Map<String, List<Event>> eventsByType = new HashMap<>();
-    private final Object lock = new Object();
+    private final ReadWriteLock rwLock = new ReentrantReadWriteLock(true);
+    private final Lock readLock = rwLock.readLock();
+    private final Lock writeLock = rwLock.writeLock();
 
     @Override
     public void insert(Event event) {
         String type = event.type();
-        synchronized (lock) {
+        writeLock.lock();
+        try {
             List<Event> events = this.eventsByType.get(type);
             if (events == null) {
                 events = new ArrayList<>(INITIAL_CAPACITY);
@@ -27,15 +33,22 @@ public class EventStoreSynch implements EventStore {
                 events.add(index, event);
             }
         }
+        finally {
+            writeLock.unlock();
+        }
     }
 
     @Override
     public void removeAll(String type) {
-        synchronized (lock) {
+        writeLock.lock();
+        try {
             List<Event> events = this.eventsByType.get(type);
             if (events != null) {
                 eventsByType.remove(type);
             }
+        }
+        finally {
+            writeLock.unlock();
         }
     }
 
@@ -45,6 +58,6 @@ public class EventStoreSynch implements EventStore {
             throw new IllegalArgumentException();
         }
         List<Event> events = this.eventsByType.get(type);
-        return new EventIteratorSynch(lock, events, startTime, endTime);
+        return new EventIteratorRW(readLock, writeLock, events, startTime, endTime);
     }
 }

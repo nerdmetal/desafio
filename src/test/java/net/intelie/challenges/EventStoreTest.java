@@ -17,7 +17,7 @@ public class EventStoreTest {
 
     @Before
     public void init() {
-        store = new EventStoreSynch();
+        store = new EventStoreRW();
     }
 
     @Rule

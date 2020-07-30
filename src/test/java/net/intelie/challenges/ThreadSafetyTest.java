@@ -9,8 +9,7 @@ import java.util.Arrays;
 import java.util.concurrent.*;
 import java.util.stream.IntStream;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class ThreadSafetyTest {
     private EventStore store;
@@ -28,7 +27,7 @@ public class ThreadSafetyTest {
 
     @Before
     public void init() {
-        store = new EventStoreSynch();
+        store = new EventStoreRW();
     }
 
     @Test
@@ -175,7 +174,7 @@ public class ThreadSafetyTest {
                         verify = true;
                     } catch (InterruptedException e) {
                         e.printStackTrace();
-                        assertTrue(false);
+                        fail();
                     }
                 }
             }

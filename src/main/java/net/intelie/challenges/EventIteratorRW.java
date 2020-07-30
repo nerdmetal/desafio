@@ -1,9 +1,14 @@
 package net.intelie.challenges;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.locks.Lock;
 
-public class EventIteratorSynch implements EventIterator {
-    private final Object lock;
+public class EventIteratorRW implements EventIterator {
+    private final Lock readLock;
+    private final Lock writeLock;
+
     private List<Event> events;
     private long startTime;
     private long endTime;
@@ -16,8 +21,9 @@ public class EventIteratorSynch implements EventIterator {
     private long currentTimestamp;
     private long nextTimeStamp;
 
-    public EventIteratorSynch(Object lock, List<Event> events, long startTime, long endTime) {
-        this.lock = lock;
+    public EventIteratorRW(Lock readLock, Lock writeLock, List<Event> events, long startTime, long endTime) {
+        this.readLock = readLock;
+        this.writeLock = writeLock;
         this.events = events;
         this.startTime = startTime;
         this.endTime = endTime;
@@ -57,7 +63,8 @@ public class EventIteratorSynch implements EventIterator {
         if (!started) {
             started = true;
 
-            synchronized (lock) {
+            readLock.lock();
+            try {
                 index = findInsertPosition(startTime);
 
                 if (index < events.size()) {
@@ -69,12 +76,19 @@ public class EventIteratorSynch implements EventIterator {
                     return false;
                 }
             }
+            finally {
+                readLock.unlock();
+            }
         }
 
         if (index < events.size()) {
             Event check;
-            synchronized (lock) {
+            readLock.lock();
+            try {
                 check = events.get(index);
+            }
+            finally {
+                readLock.unlock();
             }
             if (check.timestamp() == currentTimestamp) {
                 index++;
@@ -82,7 +96,8 @@ public class EventIteratorSynch implements EventIterator {
             else {
                 if (check.timestamp() < nextTimeStamp) {
                     int i = index;
-                    synchronized (lock) {
+                    readLock.lock();
+                    try {
                         while (i < events.size()) {
                             Event e = events.get(i);
                             if (e.timestamp() > currentTimestamp) {
@@ -91,11 +106,15 @@ public class EventIteratorSynch implements EventIterator {
                             i++;
                         }
                     }
+                    finally {
+                        readLock.unlock();
+                    }
                     index = i;// + 1;
                 }
                 else if (check.timestamp() > nextTimeStamp) {
                     int i = index;
-                    synchronized (lock) {
+                    readLock.lock();
+                    try {
                         while (i >= 0) {
                             Event e = events.get(i);
                             if (e.timestamp() <= nextTimeStamp) {
@@ -110,14 +129,21 @@ public class EventIteratorSynch implements EventIterator {
                             i--;
                         }
                     }
+                    finally {
+                        readLock.unlock();
+                    }
                 }
             }
         }
 
         if (index < events.size()) {
             Event event;
-            synchronized (lock) {
+            readLock.lock();
+            try {
                 event = events.get(index);
+            }
+            finally {
+                readLock.unlock();
             }
             if (event.timestamp() < endTime) {
                 updateCurrent(event);
@@ -141,8 +167,12 @@ public class EventIteratorSynch implements EventIterator {
     public void remove() {
         checkConditions();
 
-        synchronized (lock) {
+        writeLock.lock();
+        try {
             events.remove(current);
+        }
+        finally {
+            writeLock.unlock();
         }
     }
 
