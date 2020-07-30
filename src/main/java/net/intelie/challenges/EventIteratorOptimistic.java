@@ -4,10 +4,10 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.StampedLock;
 
-public class EventIteratorRW implements EventIterator {
-    private final Lock readLock;
-    private final Lock writeLock;
+public class EventIteratorOptimistic implements EventIterator {
+    private final StampedLock lock;
 
     private List<Event> events;
     private long startTime;
@@ -21,9 +21,8 @@ public class EventIteratorRW implements EventIterator {
     private long currentTimestamp;
     private long nextTimeStamp;
 
-    public EventIteratorRW(Lock readLock, Lock writeLock, List<Event> events, long startTime, long endTime) {
-        this.readLock = readLock;
-        this.writeLock = writeLock;
+    public EventIteratorOptimistic(StampedLock lock, List<Event> events, long startTime, long endTime) {
+        this.lock = lock;
         this.events = events;
         this.startTime = startTime;
         this.endTime = endTime;
@@ -52,6 +51,19 @@ public class EventIteratorRW implements EventIterator {
         return i;
     }
 
+    private int findCurrentTimestamp() {
+        int i = index;
+        while (i < events.size()) {
+            Event e = events.get(i);
+            if (e.timestamp() > currentTimestamp) {
+                break;
+            }
+            i++;
+        }
+
+        return i;
+    }
+
     @Override
     public boolean moveNext() {
         if (events == null) {
@@ -63,58 +75,69 @@ public class EventIteratorRW implements EventIterator {
         if (!started) {
             started = true;
 
-            readLock.lock();
-            try {
-                index = findInsertPosition(startTime);
-
-                if (index < events.size()) {
-                    updateCurrent(events.get(index));
-                    return true;
-                }
-                else {
-                    eof = true;
-                    return false;
+            long findStamp = lock.tryOptimisticRead();
+            index = findInsertPosition(startTime);
+            if (!lock.validate(findStamp)) {
+                findStamp = lock.readLock();
+                try {
+                    index = findInsertPosition(startTime);
+                } finally {
+                    lock.unlockRead(findStamp);
                 }
             }
-            finally {
-                readLock.unlock();
+
+            if (index < events.size()) {
+                long stamp = lock.tryOptimisticRead();
+                updateCurrent(events.get(index));
+                if (!lock.validate(stamp)) {
+                    stamp = lock.readLock();
+                    try {
+                        updateCurrent(events.get(index));
+                    } finally {
+                        lock.unlockRead(stamp);
+                    }
+                }
+                return true;
+            }
+            else {
+                eof = true;
+                return false;
             }
         }
 
         if (index < events.size()) {
             Event check;
-            readLock.lock();
-            try {
-                check = events.get(index);
-            }
-            finally {
-                readLock.unlock();
+            long stamp = lock.tryOptimisticRead();
+            check = events.get(index);
+            if (!lock.validate(stamp)) {
+                stamp = lock.readLock();
+                try {
+                    check = events.get(index);
+                } finally {
+                    lock.unlockRead(stamp);
+                }
             }
             if (check.timestamp() == currentTimestamp) {
                 index++;
             }
             else {
                 if (check.timestamp() < nextTimeStamp) {
-                    int i = index;
-                    readLock.lock();
-                    try {
-                        while (i < events.size()) {
-                            Event e = events.get(i);
-                            if (e.timestamp() > currentTimestamp) {
-                                break;
-                            }
-                            i++;
+                    long forwardStamp = lock.tryOptimisticRead();
+                    index = findCurrentTimestamp();
+                    if (!lock.validate(forwardStamp)) {
+                        forwardStamp = lock.readLock();
+                        try {
+                            index = findCurrentTimestamp();
+                        } finally {
+                            lock.unlockRead(forwardStamp);
                         }
                     }
-                    finally {
-                        readLock.unlock();
-                    }
-                    index = i;// + 1;
                 }
                 else if (check.timestamp() > nextTimeStamp) {
                     int i = index;
-                    readLock.lock();
+                    long readStamp = lock.readLock();
                     try {
+                        //TODO criar método para poder usar lock otimista
                         while (i >= 0) {
                             Event e = events.get(i);
                             if (e.timestamp() <= nextTimeStamp) {
@@ -130,23 +153,38 @@ public class EventIteratorRW implements EventIterator {
                         }
                     }
                     finally {
-                        readLock.unlock();
+                        lock.unlockRead(readStamp);
                     }
                 }
             }
         }
 
         if (index < events.size()) {
-            readLock.lock();
-            try {
-                Event event = events.get(index);
-                if (event.timestamp() < endTime) {
-                    updateCurrent(event);
-                    return true;
+            long stamp = lock.tryOptimisticRead();
+            Event event = events.get(index);
+            if (!lock.validate(stamp)) {
+                stamp = lock.readLock();
+                try {
+                    event = events.get(index);
+                }
+                finally {
+                    lock.unlockRead(stamp);
                 }
             }
-            finally {
-                readLock.unlock();
+            if (event.timestamp() < endTime) {
+                long updateCurrentStamp = lock.tryOptimisticRead();
+                updateCurrent(event);
+                if (!lock.validate(updateCurrentStamp)) {
+                    updateCurrentStamp = lock.readLock();
+                    try {
+                        updateCurrent(event);
+                    }
+                    finally {
+                        lock.unlockRead(updateCurrentStamp);
+                    }
+                }
+
+                return true;
             }
         }
 
@@ -166,12 +204,12 @@ public class EventIteratorRW implements EventIterator {
     public void remove() {
         checkConditions();
 
-        writeLock.lock();
+        long stamp = lock.writeLock();
         try {
             events.remove(current);
         }
         finally {
-            writeLock.unlock();
+            lock.unlockWrite(stamp);
         }
     }
 

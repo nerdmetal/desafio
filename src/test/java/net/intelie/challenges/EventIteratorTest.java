@@ -23,7 +23,7 @@ public class EventIteratorTest {
 
     @Before
     public void init() {
-        store = new EventStoreRW();
+        store = new EventStoreOptimistic();
     }
 
     @Test
@@ -73,7 +73,7 @@ public class EventIteratorTest {
 
     @Test
     public void testClose() {
-        try (EventIterator eventIterator = store.query("type 1", 0, 1);) {
+        try (EventIterator eventIterator = store.query("type 1", 0, 1)) {
         } catch (Exception e) {
             e.printStackTrace();
             fail();

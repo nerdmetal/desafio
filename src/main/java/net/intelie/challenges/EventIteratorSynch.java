@@ -115,13 +115,12 @@ public class EventIteratorSynch implements EventIterator {
         }
 
         if (index < events.size()) {
-            Event event;
             synchronized (lock) {
-                event = events.get(index);
-            }
-            if (event.timestamp() < endTime) {
-                updateCurrent(event);
-                return true;
+                Event event = events.get(index);
+                if (event.timestamp() < endTime) {
+                    updateCurrent(event);
+                    return true;
+                }
             }
         }
 
