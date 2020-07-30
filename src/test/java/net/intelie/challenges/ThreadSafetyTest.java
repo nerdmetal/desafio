@@ -25,7 +25,7 @@ public class ThreadSafetyTest {
     }
 
     @Test
-    public void testInsertThreadSafety() throws InterruptedException {
+    public void testInsertThreads() throws InterruptedException {
         ExecutorService executorService = Executors.newFixedThreadPool(10);
 
         executorService.execute(() -> store.insert(new Event("type 1", 1)));
