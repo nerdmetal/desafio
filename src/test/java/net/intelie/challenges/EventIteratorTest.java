@@ -1,5 +1,6 @@
 package net.intelie.challenges;
 
+import net.intelie.challenges.exploration.EventStoreOptimistic;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -10,6 +11,9 @@ import static org.junit.Assert.*;
 public class EventIteratorTest {
     private EventStore store;
 
+    /**
+     * Create initial data.
+     */
     private void insertType1Events() {
         store.insert(new Event("type 1", 0L));
         store.insert(new Event("type 1", 1L));
@@ -23,7 +27,7 @@ public class EventIteratorTest {
 
     @Before
     public void init() {
-        store = new EventStoreOptimistic();
+        store = new EventStoreSynch();
     }
 
     @Test
@@ -65,7 +69,7 @@ public class EventIteratorTest {
     }
 
     @Test
-    public void inverseQuery() {
+    public void wrongRangeQuery() {
         exceptionRule.expect(IllegalArgumentException.class);
         EventIterator eventIterator = store.query("type 1", 2, 1);
         eventIterator.moveNext();
@@ -81,7 +85,7 @@ public class EventIteratorTest {
     }
 
     @Test
-    public void testEmptyStore() {
+    public void testEmptyQuery() {
         insertType1Events();
 
         EventIterator eventIterator = store.query("none", 1, 5);
@@ -91,6 +95,7 @@ public class EventIteratorTest {
     @Test
     public void testEndTime() {
         insertType1Events();
+
         EventIterator eventIterator = store.query("type 1", 0, 5);
         int count = 0;
         while (eventIterator.moveNext()) {
@@ -128,51 +133,7 @@ public class EventIteratorTest {
     }
 
     @Test
-    public void testMoreTypes() {
-        store.insert(new Event("type 1", 1));
-        store.insert(new Event("type 1", 3));
-        store.insert(new Event("type 1", 5));
-
-        store.insert(new Event("type 2", 2));
-        store.insert(new Event("type 2", 4));
-
-        EventIterator eventIterator = store.query("type 1", 1, 10);
-        int count = 0;
-        while (eventIterator.moveNext()) {
-            Event event = eventIterator.current();
-            assertEquals("type 1", event.type());
-            count++;
-        }
-        assertEquals(3, count);
-
-        eventIterator = store.query("type 2", 1, 10);
-        count = 0;
-        while (eventIterator.moveNext()) {
-            Event event = eventIterator.current();
-            assertEquals("type 2", event.type());
-            count++;
-        }
-        assertEquals(2, count);
-    }
-
-    @Test
-    public void givenInitialData_whenInsertionBefore_testConsumerUpdated() {
-        insertType1Events();
-
-        EventIterator eventIterator = store.query("type 1", 3, 10);
-        int count = 0;
-        while (eventIterator.moveNext()) {
-            Event event = eventIterator.current();
-            System.out.printf("read type: %s, timestamp: %d\n", event.type(), event.timestamp());
-            assertTrue(event.timestamp() >= 3);
-            assertTrue(event.timestamp() < 10);
-            count++;
-        }
-        assertEquals(3, count);
-    }
-
-    @Test
-    public void remove() {
+    public void testRemove() {
         store.insert(new Event("type 1", 1));
         store.insert(new Event("type 1", 3));
         store.insert(new Event("type 1", 5));
@@ -190,29 +151,6 @@ public class EventIteratorTest {
         while (eventIterator.moveNext()) {
             Event event = eventIterator.current();
             assertNotEquals(3, event.timestamp());
-            count++;
-        }
-        assertEquals(2, count);
-    }
-
-    @Test
-    public void removeAll() {
-        store.insert(new Event("type 1", 1));
-        store.insert(new Event("type 1", 3));
-        store.insert(new Event("type 1", 5));
-
-        store.insert(new Event("type 2", 2));
-        store.insert(new Event("type 2", 4));
-
-        store.removeAll("type 1");
-
-        EventIterator eventIterator = store.query("type 1", 1, 10);
-        assertFalse(eventIterator.moveNext());
-
-        eventIterator = store.query("type 2", 1, 10);
-        int count = 0;
-        while (eventIterator.moveNext()) {
-            Event event = eventIterator.current();
             count++;
         }
         assertEquals(2, count);

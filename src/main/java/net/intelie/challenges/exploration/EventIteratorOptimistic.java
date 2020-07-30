@@ -1,4 +1,7 @@
-package net.intelie.challenges;
+package net.intelie.challenges.exploration;
+
+import net.intelie.challenges.Event;
+import net.intelie.challenges.EventIterator;
 
 import java.util.Collections;
 import java.util.Comparator;

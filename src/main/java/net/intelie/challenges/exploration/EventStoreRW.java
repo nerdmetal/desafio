@@ -1,22 +1,27 @@
-package net.intelie.challenges;
+package net.intelie.challenges.exploration;
+
+import net.intelie.challenges.Event;
+import net.intelie.challenges.EventIterator;
+import net.intelie.challenges.EventStore;
 
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.concurrent.locks.StampedLock;
 
-public class EventStoreOptimistic implements EventStore {
+public class EventStoreRW implements EventStore {
 
     private static final int INITIAL_CAPACITY = 1000;
 
     private Map<String, List<Event>> eventsByType = new HashMap<>();
-    private final StampedLock lock = new StampedLock();
+    private final ReadWriteLock rwLock = new ReentrantReadWriteLock(true);
+    private final Lock readLock = rwLock.readLock();
+    private final Lock writeLock = rwLock.writeLock();
 
     @Override
     public void insert(Event event) {
         String type = event.type();
-        long stamp = lock.writeLock();
+        writeLock.lock();
         try {
             List<Event> events = this.eventsByType.get(type);
             if (events == null) {
@@ -33,13 +38,13 @@ public class EventStoreOptimistic implements EventStore {
             }
         }
         finally {
-            lock.unlockWrite(stamp);
+            writeLock.unlock();
         }
     }
 
     @Override
     public void removeAll(String type) {
-        long stamp = lock.writeLock();
+        writeLock.lock();
         try {
             List<Event> events = this.eventsByType.get(type);
             if (events != null) {
@@ -47,7 +52,7 @@ public class EventStoreOptimistic implements EventStore {
             }
         }
         finally {
-            lock.unlockWrite(stamp);
+            writeLock.unlock();
         }
     }
 
@@ -57,6 +62,6 @@ public class EventStoreOptimistic implements EventStore {
             throw new IllegalArgumentException();
         }
         List<Event> events = this.eventsByType.get(type);
-        return new EventIteratorOptimistic(lock, events, startTime, endTime);
+        return new EventIteratorRW(readLock, writeLock, events, startTime, endTime);
     }
 }

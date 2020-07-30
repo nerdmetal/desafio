@@ -46,31 +46,7 @@ public class EventIteratorSynch implements EventIterator {
         return i;
     }
 
-    @Override
-    public boolean moveNext() {
-        if (events == null) {
-            started = true;
-            eof = true;
-            return false;
-        }
-
-        if (!started) {
-            started = true;
-
-            synchronized (lock) {
-                index = findInsertPosition(startTime);
-
-                if (index < events.size()) {
-                    updateCurrent(events.get(index));
-                    return true;
-                }
-                else {
-                    eof = true;
-                    return false;
-                }
-            }
-        }
-
+    private void checkAndUpdatePosition() {
         if (index < events.size()) {
             Event check;
             synchronized (lock) {
@@ -91,7 +67,7 @@ public class EventIteratorSynch implements EventIterator {
                             i++;
                         }
                     }
-                    index = i;// + 1;
+                    index = i;
                 }
                 else if (check.timestamp() > nextTimeStamp) {
                     int i = index;
@@ -113,6 +89,37 @@ public class EventIteratorSynch implements EventIterator {
                 }
             }
         }
+    }
+
+    @Override
+    public boolean moveNext() {
+        if (events == null) {
+            started = true;
+            eof = true;
+            return false;
+        }
+
+        if (!started) {
+            started = true;
+
+            synchronized (lock) {
+                /*
+                 * Esperamos a primeira chamada para evitar posicionar sem necessidade.
+                 */
+                index = findInsertPosition(startTime);
+
+                if (index < events.size()) {
+                    updateCurrent(events.get(index));
+                    return true;
+                }
+                else {
+                    eof = true;
+                    return false;
+                }
+            }
+        }
+
+        checkAndUpdatePosition();
 
         if (index < events.size()) {
             synchronized (lock) {

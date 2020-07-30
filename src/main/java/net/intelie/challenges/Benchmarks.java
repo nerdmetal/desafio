@@ -1,5 +1,7 @@
 package net.intelie.challenges;
 
+import net.intelie.challenges.exploration.EventStoreOptimistic;
+import net.intelie.challenges.exploration.EventStoreRW;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Warmup;

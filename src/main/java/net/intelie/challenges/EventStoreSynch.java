@@ -2,6 +2,9 @@ package net.intelie.challenges;
 
 import java.util.*;
 
+/**
+ * Thread-Safe EventStore.
+ */
 public class EventStoreSynch implements EventStore {
 
     private static final int INITIAL_CAPACITY = 1000;
